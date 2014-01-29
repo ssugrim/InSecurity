@@ -10,16 +10,21 @@ var defenderMoves = [];
 var attackerMoves = [];
 var score = 0;
 function startGameLogic() {
-	document.getElementById("infoArea").innerText=0;
+	document.getElementById("infoArea").innerHTML=0;
 	connection.on('open', function() {
 		connection.on('data', function(data) {
+			if(data=="gameover") {
+				gameOver("Defender ran out of spaces to move to!");
+			}
 			if(playerType=="attacker") {
 				score = data.score;
 				if(data.results.attackSuccess) {
 					//remove all links to a destroyed node
-					for(var index in levelLayout.edges) {
-						if(levelLayout.edges[index].indexOf(myCoords*1)<0) {
-							levelLayout.edges[index].splice(levelLayout.edges[index].indexOf(myCoords*1),1);
+					if(levelLayout.nodes[myCoords].isDestructible) {
+						for(var index in levelLayout.edges) {
+							if(levelLayout.edges[index].indexOf(myCoords*1)>-1) {
+								levelLayout.edges[index].splice(levelLayout.edges[index].indexOf(myCoords*1),1);
+							}
 						}
 					}
 					levelLayout.nodes[myCoords*1].isDisabled=true;
@@ -39,7 +44,7 @@ function startGameLogic() {
 				if(attackerMoves[attackerMoves.length-1].isAttacking) {
 					$.notify("Attack Failed");
 				}
-				document.getElementById("infoArea").innerText++;
+				document.getElementById("infoArea").innerHTML++;
 				canMove=true;
 			}
 			else {
@@ -56,6 +61,7 @@ function startGameLogic() {
 
 function attackSpace(coords, isAttacking) {
 	myCoords=coords;
+	if(levelLayout.nodes[myCoords].isDisabled) isAttacking = false;
 	connection.send({"coords" : coords, "isAttacking" : isAttacking});
 	canMove=false;
 }
@@ -84,15 +90,21 @@ function resolveConflict() {
 	if(resolution.results.attackSuccess) {
 		score+=levelLayout.nodes[attackerMoves[attackerMoves.length-1].coords].value;
 		//remove all links to a destroyed node
-		for(var index in levelLayout.edges) {
-			if(levelLayout.edges[index].indexOf(myCoords*1)<0) {
-				levelLayout.edges[index].splice(levelLayout.edges[index].indexOf(myCoords*1),1);
+		if(levelLayout.nodes[myCoords].isDestructible) {
+			for(var index in levelLayout.edges) {
+				if(levelLayout.edges[index].indexOf(myCoords*1)>-1) {
+					levelLayout.edges[index].splice(levelLayout.edges[index].indexOf(myCoords*1),1);
+				}
 			}
 		}
 		levelLayout.nodes[attackerMoves[attackerMoves.length-1].coords].isDisabled=true;
 	}
 	resolution.score=score;
 	connection.send(resolution);
+	if(levelLayout.edges[myCoords].length==0) {
+		connection.send("gameover");
+		gameOver("You ran out of spaces to move to!");
+	}
 	if(resolution.results.attackerCaught && !isOnSameSpot) {
 		gameOver("The attacker was exposed!");
 	}
@@ -104,7 +116,7 @@ function resolveConflict() {
 	}
 	defenderMoved=false;
 	attackerMoved=false;
-	document.getElementById("infoArea").innerText++;
+	document.getElementById("infoArea").innerHTML++;
 }
 
 function gameOver(reason) {
